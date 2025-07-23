@@ -1,6 +1,6 @@
 // src/components/Scanner.jsx
 import React, { useEffect, useRef, useState } from "react";
-import * as tmImage from "@teachablemachine/image";
+import * as tf from '@tensorflow/tfjs';
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -9,7 +9,8 @@ export default function Scanner() {
   const webcamRef = useRef(null);
   const [vin, setVin] = useState("");
 
-  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_URL/";
+  const modelURL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL/model.json";
+
 
   let model, webcam, maxPredictions;
 
