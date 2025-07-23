@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import Dashboard from './components/Dashboard';
@@ -8,7 +8,7 @@ import PrivateRoute from './components/PrivateRoute';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Signup />} />
@@ -22,6 +22,6 @@ export default function App() {
         <PrivateRoute><Logs /></PrivateRoute>
       } />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

@@ -1,20 +1,20 @@
 // src/components/Scanner.jsx
 import React, { useEffect, useRef, useState } from "react";
-import * as tf from '@tensorflow/tfjs';
+import * as tmImage from "@teachablemachine/image";
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function Scanner() {
-  const webcamRef = useRef(null);
+  const webcamContainerRef = useRef(null);
   const [vin, setVin] = useState("");
 
-  const modelURL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL/model.json";
-
+  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_URL/"; // Replace with your model
+  const BASEURL = "https://your-backend-url.com"; // Replace with your API base URL
 
   let model, webcam, maxPredictions;
 
-  // Load the Teachable Machine model
+  // Load Teachable Machine Model
   const loadModel = async () => {
     toast.info("📦 Loading model...");
     try {
@@ -23,68 +23,63 @@ export default function Scanner() {
 
       model = await tmImage.load(modelURL, metadataURL);
       maxPredictions = model.getTotalClasses();
-
-      toast.success("✅ Model loaded successfully");
-    } catch (error) {
-      console.error("Model loading failed", error);
-      toast.error("❌ Failed to load model");
+      toast.success("✅ Model loaded");
+    } catch (err) {
+      console.error(err);
+      toast.error("❌ Model load failed");
     }
   };
 
-  // Start webcam and prediction loop
+  // Start webcam
   const startWebcam = async () => {
     try {
-      webcam = new tmImage.Webcam(400, 300, true); // width, height, flip
-      await webcam.setup(); // request access to webcam
+      webcam = new tmImage.Webcam(400, 300, true);
+      await webcam.setup();
       await webcam.play();
-      webcamRef.current.appendChild(webcam.canvas);
+      webcamContainerRef.current.innerHTML = ""; // Clear previous if any
+      webcamContainerRef.current.appendChild(webcam.canvas);
       toast.success("📷 Webcam started");
 
       window.requestAnimationFrame(loop);
     } catch (err) {
-      toast.error("❌ Webcam access denied");
+      console.error("Webcam error:", err);
+      toast.error("❌ Webcam failed");
     }
   };
 
   // Prediction loop
   const loop = async () => {
-    webcam.update(); // update webcam frame
+    webcam.update();
     await predict();
     window.requestAnimationFrame(loop);
   };
 
-  // Predict VIN using the model
+  // Predict
   const predict = async () => {
     if (!model || !webcam) return;
-    const prediction = await model.predict(webcam.canvas);
 
+    const prediction = await model.predict(webcam.canvas);
     prediction.forEach(async (p) => {
-      if (p.probability > 0.95) {
-        if (p.className !== vin) {
-          setVin(p.className);
-          toast.info(`🔍 VIN Detected: ${p.className}`);
-          await logVIN(p.className);
-        }
+      if (p.probability > 0.95 && p.className !== vin) {
+        setVin(p.className);
+        toast.info(`🔍 VIN Detected: ${p.className}`);
+        await logVIN(p.className);
       }
     });
   };
 
-  // Log VIN with location
+  // Log VIN
   const logVIN = async (vinNumber) => {
-    toast.info("📡 Getting location...");
     try {
       const position = await new Promise((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject)
       );
 
       const location = `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`;
-      await axios.put(`BASEURL/api/vin/${vinNumber}`, {
-        location,
-      });
-
+      await axios.put(`${BASEURL}/api/vin/${vinNumber}`, { location });
       toast.success("✅ VIN logged successfully");
     } catch (err) {
-      console.error("Logging error:", err);
+      console.error(err);
       toast.error("❌ Failed to log VIN");
     }
   };
@@ -99,8 +94,11 @@ export default function Scanner() {
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold mb-4">📸 VIN Scanner</h2>
-      <div ref={webcamRef} className="border rounded-md shadow-md" />
-      <p className="mt-4">
+      <div
+        ref={webcamContainerRef}
+        className="w-[400px] h-[300px] border rounded-md shadow-lg overflow-hidden"
+      />
+      <p className="mt-4 text-lg">
         Detected VIN: <strong>{vin || "Scanning..."}</strong>
       </p>
       <ToastContainer position="top-center" autoClose={3000} />
