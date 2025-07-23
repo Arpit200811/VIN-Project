@@ -77,7 +77,7 @@ export default function Scanner() {
       );
 
       const location = `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`;
-      await axios.put(`http://localhost:5000/api/vin/${vinNumber}`, {
+      await axios.put(`BASEURL/api/vin/${vinNumber}`, {
         location,
       });
 
