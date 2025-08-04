@@ -1,0 +1,29 @@
+.overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 280px;
+  height: 100px;
+  transform: translate(-50%, -50%);
+  border: 3px dashed #00f;
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(0, 102, 255, 0.7);
+  animation: glow 1.5s infinite alternate;
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 12px rgba(0, 102, 255, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(0, 102, 255, 1);
+  }
+}
