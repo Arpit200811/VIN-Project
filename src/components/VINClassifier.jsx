@@ -63,14 +63,14 @@ const VINScanner = () => {
         if (!videoRef.current) return;
 
         // TODO: Replace with actual VIN OCR + classifier prediction
-        // अभी demo के लिए Random Result डाल रहा हूँ
+        
         const random = Math.random();
         if (random < 0.3) {
           setStatus("Stopped: Paper/Other detected ❌");
           return;
         }
 
-        const detectedVIN = "1HGCM82633A123456"; // <-- यहाँ OCR से VIN आना चाहिए
+        const detectedVIN = "1HGCM82633A123456"; 
         if (!validateVIN(detectedVIN)) {
           setStatus("Invalid VIN ❌");
           return;
@@ -90,7 +90,7 @@ const VINScanner = () => {
         console.error("❌ Detection error:", err);
         setStatus("Error in scanning...");
       }
-    }, 5000); // हर 5 सेकंड में चेक करो
+    }, 5000); 
 
     return () => clearInterval(interval);
   }, [model, streaming]);

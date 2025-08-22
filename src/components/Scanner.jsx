@@ -1,4 +1,3 @@
-// src/components/VINScanner.jsx
 import React, { useEffect, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 import Swal from "sweetalert2";
@@ -29,10 +28,12 @@ export default function VINScanner() {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode },
         audio: false,
       });
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -55,7 +56,6 @@ export default function VINScanner() {
   useEffect(() => {
     const id = setInterval(() => runOCR(), 1500);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detectedVIN, busy]);
 
   const runOCR = async () => {
@@ -64,6 +64,7 @@ export default function VINScanner() {
     if (!video || !video.videoWidth || !video.videoHeight) return;
 
     setBusy(true);
+
     try {
       const fullW = video.videoWidth;
       const fullH = video.videoHeight;
@@ -78,6 +79,7 @@ export default function VINScanner() {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
 
+      // ✅ v6+ simplified usage
       const { data } = await Tesseract.recognize(canvas, "eng", {
         tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
       });
@@ -99,7 +101,6 @@ export default function VINScanner() {
     }
   };
 
-  // 💾 Save VIN API
   const saveVIN = async (vin) => {
     try {
       const res = await axios.post(`${API_BASE}/api/vin/save`, { vin });
@@ -143,7 +144,6 @@ export default function VINScanner() {
           muted
           className="w-full h-full object-cover"
         />
-        {/* Overlay band */}
         <div
           className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 ${boxColor} transition-colors`}
           style={{ width: "80%", height: "22%" }}
@@ -157,7 +157,9 @@ export default function VINScanner() {
 
       <div className="mt-4 flex gap-3">
         <button
-          onClick={() => setFacingMode((p) => (p === "user" ? "environment" : "user"))}
+          onClick={() =>
+            setFacingMode((p) => (p === "user" ? "environment" : "user"))
+          }
           className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow"
         >
           🔄 Switch Camera
@@ -171,7 +173,8 @@ export default function VINScanner() {
       </div>
 
       <p className="mt-3 font-semibold">
-        Detected VIN: <span className="text-green-700">{detectedVIN || "—"}</span>
+        Detected VIN:{" "}
+        <span className="text-green-700">{detectedVIN || "—"}</span>
       </p>
 
       <style>{`
