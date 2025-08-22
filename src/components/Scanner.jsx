@@ -1,8 +1,9 @@
+// src/components/VINScanner.jsx
 import React, { useEffect, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 import Swal from "sweetalert2";
 import axios from "axios";
-import { extractBestVIN, isValidVINChecksum } from "../Utils/vinUtils";
+import { extractBestVIN, isValidVINChecksum } from "../utils/vinUtils";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -11,12 +12,12 @@ export default function VINScanner() {
   const streamRef = useRef(null);
   const [facingMode, setFacingMode] = useState("environment");
   const [detectedVIN, setDetectedVIN] = useState("");
-  const [busy, setBusy] = useState(false); // OCR throttle
-  const [boxColor, setBoxColor] = useState("border-blue-500"); // overlay color
+  const [busy, setBusy] = useState(false);
+  const [boxColor, setBoxColor] = useState("border-blue-500");
 
-  // 🔔 Beep + vibration
+  // 🔔 Beep + vibration feedback
   const feedback = () => {
-    const audio = new Audio("/sounds/beep.mp3"); // keep optional
+    const audio = new Audio("/sounds/beep.mp3");
     audio.play().catch(() => {});
     if (navigator.vibrate) navigator.vibrate([200, 120, 200]);
   };
@@ -25,7 +26,7 @@ export default function VINScanner() {
   const startCamera = async () => {
     try {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -35,7 +36,7 @@ export default function VINScanner() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(()=>{});
+        await videoRef.current.play().catch(() => {});
       }
     } catch (err) {
       console.error("Camera error:", err);
@@ -46,11 +47,11 @@ export default function VINScanner() {
   useEffect(() => {
     startCamera();
     return () => {
-      if (streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, [facingMode]);
 
-  // 🧠 OCR every ~1.5s (auto)
+  // 🧠 OCR every ~1.5s
   useEffect(() => {
     const id = setInterval(() => runOCR(), 1500);
     return () => clearInterval(id);
@@ -64,11 +65,10 @@ export default function VINScanner() {
 
     setBusy(true);
     try {
-      // Canvas crop: केवल center band (VIN plate area जैसा)
       const fullW = video.videoWidth;
       const fullH = video.videoHeight;
       const cropW = Math.floor(fullW * 0.9);
-      const cropH = Math.floor(fullH * 0.25); // horizontal strip
+      const cropH = Math.floor(fullH * 0.25);
       const sx = Math.floor((fullW - cropW) / 2);
       const sy = Math.floor((fullH - cropH) / 2);
 
@@ -84,13 +84,11 @@ export default function VINScanner() {
 
       const best = extractBestVIN(data.text || "");
       if (best && best !== detectedVIN) {
-        // Validate again (strict)
         if (isValidVINChecksum(best)) {
           setDetectedVIN(best);
           setBoxColor("border-green-500");
           feedback();
           await saveVIN(best);
-          // 1.5s बाद overlay वापस नीला
           setTimeout(() => setBoxColor("border-blue-500"), 1500);
         }
       }
@@ -101,7 +99,7 @@ export default function VINScanner() {
     }
   };
 
-  // 💾 Save API (duplicate सुरक्षित)
+  // 💾 Save VIN API
   const saveVIN = async (vin) => {
     try {
       const res = await axios.post(`${API_BASE}/api/vin/save`, { vin });
@@ -145,17 +143,14 @@ export default function VINScanner() {
           muted
           className="w-full h-full object-cover"
         />
-        {/* Overlay: center band */}
+        {/* Overlay band */}
         <div
           className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 ${boxColor} transition-colors`}
           style={{ width: "80%", height: "22%" }}
         >
-          {/* moving scan line */}
           <div
             className="absolute left-0 w-full h-[3px] bg-white/80"
-            style={{
-              animation: "scanline 2s linear infinite",
-            }}
+            style={{ animation: "scanline 2s linear infinite" }}
           />
         </div>
       </div>
