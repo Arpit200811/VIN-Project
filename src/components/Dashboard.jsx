@@ -12,7 +12,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import AOS from "aos";
 import "aos/dist/aos.css";
-import VINClassifier from "./VINClassifier"; // Make sure this file exists
+// import VINClassifier from "./VINClassifier"; // Make sure this file exists
 
 // const API = import.meta.env.VITE_API_URL;
 const COLORS = ["#0088FE", "#00C49F"]; // metal, paper
@@ -264,7 +264,7 @@ const AdminLogs = () => {
         </button>
       </div>
 
-      <VINClassifier />
+      {/* <VINClassifier /> */}
     </div>
   );
 };

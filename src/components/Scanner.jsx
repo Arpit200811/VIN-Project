@@ -1,217 +1,190 @@
-import React, { useRef, useEffect, useState } from "react";
-import * as tmImage from "@teachablemachine/image";
+import React, { useEffect, useRef, useState } from "react";
+import Tesseract from "tesseract.js";
+import Swal from "sweetalert2";
 import axios from "axios";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import "./Overlay.css";
+import { extractBestVIN, isValidVINChecksum } from "../Utils/vinUtils";
 
-const Scanner = () => {
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+export default function VINScanner() {
   const videoRef = useRef(null);
-  const [vin, setVin] = useState("");
-  const [model, setModel] = useState(null);
-  const [webcamStream, setWebcamStream] = useState(null);
+  const streamRef = useRef(null);
   const [facingMode, setFacingMode] = useState("environment");
-  const [isTorchOn, setIsTorchOn] = useState(false);
-  const [imageCapture, setImageCapture] = useState(null);
-  const [isBarcodeFallbackEnabled, setIsBarcodeFallbackEnabled] = useState(true);
+  const [detectedVIN, setDetectedVIN] = useState("");
+  const [busy, setBusy] = useState(false); // OCR throttle
+  const [boxColor, setBoxColor] = useState("border-blue-500"); // overlay color
 
-  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_URL/";
-  const BASE_URL = "https://vin-project-backend.onrender.com";
-
-  // GPS helper
-  const getGPS = () => {
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (err) => {
-          console.warn("Geolocation error:", err);
-          resolve({ latitude: null, longitude: null });
-        }
-      );
-    });
+  // 🔔 Beep + vibration
+  const feedback = () => {
+    const audio = new Audio("/sounds/beep.mp3"); // keep optional
+    audio.play().catch(() => {});
+    if (navigator.vibrate) navigator.vibrate([200, 120, 200]);
   };
 
-  // Send VIN + metadata to backend
-  const sendScanToBackend = async (vinNumber, result = "detected") => {
+  // 🎥 Start camera
+  const startCamera = async () => {
     try {
-      const coords = await getGPS();
-      const ipRes = await axios.get("https://api.ipify.org?format=json");
-
-      await axios.post(`${BASE_URL}/api/vin/scan`, {
-        vin: vinNumber,
-        result,
-        lat: coords.latitude,
-        lng: coords.longitude,
-        ip: ipRes.data.ip,
-      });
-
-      toast.success("✅ VIN logged successfully");
-    } catch (err) {
-      console.error("Scan failed:", err);
-      toast.error("❌ Failed to log VIN");
-    }
-  };
-
-  // Load model
-  const loadModel = async () => {
-    toast.info("📦 Loading model...");
-    try {
-      const modelURL = `${MODEL_URL}model.json`;
-      const metadataURL = `${MODEL_URL}metadata.json`;
-      const loadedModel = await tmImage.load(modelURL, metadataURL);
-      setModel(loadedModel);
-      toast.success("✅ Model loaded");
-    } catch (err) {
-      console.error("Model load error:", err);
-      toast.error("❌ Failed to load model");
-    }
-  };
-
-  // Camera setup
-  const setupCamera = async () => {
-    try {
-      const constraints = {
-        video: {
-          facingMode,
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
         audio: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      });
+      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        await videoRef.current.play().catch(()=>{});
       }
-
-      setWebcamStream(stream);
-      const track = stream.getVideoTracks()[0];
-      const capture = new ImageCapture(track);
-      setImageCapture(capture);
     } catch (err) {
       console.error("Camera error:", err);
-      toast.error("❌ Camera access failed");
+      Swal.fire("Camera Error", err.message || "Unable to open camera", "error");
     }
   };
 
-  // Main detection loop
-  const loop = async () => {
-    if (!videoRef.current) return;
-
-    // Teachable Machine
-    if (model) {
-      const prediction = await model.predict(videoRef.current);
-      const match = prediction.find((p) => p.probability > 0.95);
-
-      if (match && match.className !== vin) {
-        setVin(match.className);
-        toast.info(`🔍 VIN Detected: ${match.className}`);
-        await sendScanToBackend(match.className, "metal"); // Example type
-      }
-    }
-
-    // Barcode Fallback
-    if (isBarcodeFallbackEnabled && "BarcodeDetector" in window) {
-      const barcodeDetector = new BarcodeDetector({ formats: ["code_128", "code_39", "ean_13"] });
-      try {
-        const barcodes = await barcodeDetector.detect(videoRef.current);
-        if (barcodes.length > 0) {
-          const code = barcodes[0].rawValue;
-          if (code !== vin) {
-            setVin(code);
-            toast.info(`📦 Barcode Detected: ${code}`);
-            await sendScanToBackend(code, "paper");
-          }
-        }
-      } catch (err) {
-        console.warn("Barcode detection error:", err);
-      }
-    }
-
-    requestAnimationFrame(loop);
-  };
-
-  const toggleCamera = () => {
-    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
-  };
-
-  const toggleTorch = async () => {
-    if (!imageCapture) return toast.error("⚠️ Torch not supported");
-
-    const track = webcamStream?.getVideoTracks()[0];
-    const capabilities = track?.getCapabilities?.();
-
-    if (capabilities?.torch) {
-      try {
-        await track.applyConstraints({ advanced: [{ torch: !isTorchOn }] });
-        setIsTorchOn(!isTorchOn);
-      } catch (err) {
-        console.error("Torch error:", err);
-        toast.error("❌ Torch control failed");
-      }
-    } else {
-      toast.warning("⚠️ Torch not supported on this device");
-    }
-  };
-
-  // Load model on mount
   useEffect(() => {
-    loadModel();
-  }, []);
-
-  // Camera setup when facingMode changes
-  useEffect(() => {
-    setupCamera();
+    startCamera();
     return () => {
-      if (webcamStream) webcamStream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
     };
   }, [facingMode]);
 
-  // Start loop when model is ready
+  // 🧠 OCR every ~1.5s (auto)
   useEffect(() => {
-    if (model && videoRef.current) {
-      requestAnimationFrame(loop);
+    const id = setInterval(() => runOCR(), 1500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedVIN, busy]);
+
+  const runOCR = async () => {
+    if (busy) return;
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+
+    setBusy(true);
+    try {
+      // Canvas crop: केवल center band (VIN plate area जैसा)
+      const fullW = video.videoWidth;
+      const fullH = video.videoHeight;
+      const cropW = Math.floor(fullW * 0.9);
+      const cropH = Math.floor(fullH * 0.25); // horizontal strip
+      const sx = Math.floor((fullW - cropW) / 2);
+      const sy = Math.floor((fullH - cropH) / 2);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+
+      const { data } = await Tesseract.recognize(canvas, "eng", {
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      });
+
+      const best = extractBestVIN(data.text || "");
+      if (best && best !== detectedVIN) {
+        // Validate again (strict)
+        if (isValidVINChecksum(best)) {
+          setDetectedVIN(best);
+          setBoxColor("border-green-500");
+          feedback();
+          await saveVIN(best);
+          // 1.5s बाद overlay वापस नीला
+          setTimeout(() => setBoxColor("border-blue-500"), 1500);
+        }
+      }
+    } catch (err) {
+      console.error("OCR error:", err);
+    } finally {
+      setBusy(false);
     }
-  }, [model]);
+  };
+
+  // 💾 Save API (duplicate सुरक्षित)
+  const saveVIN = async (vin) => {
+    try {
+      const res = await axios.post(`${API_BASE}/api/vin/save`, { vin });
+      if (res.status === 201) {
+        Swal.fire({
+          icon: "success",
+          title: "Saved",
+          text: `VIN ${vin} saved successfully`,
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire("Info", res.data?.message || "Saved", "info");
+      }
+    } catch (err) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message || err.message;
+      if (status === 409) {
+        Swal.fire({
+          icon: "warning",
+          title: "Duplicate",
+          text: `VIN ${vin} already exists`,
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire("Error", msg || "Failed to save", "error");
+      }
+    }
+  };
 
   return (
-    <div className="relative w-full flex flex-col items-center">
-      <h2 className="text-xl font-bold mb-2">📸 VIN Scanner</h2>
+    <div className="relative w-full min-h-screen flex flex-col items-center justify-center bg-gray-100">
+      <h2 className="text-xl font-bold mb-3">📷 VIN Auto Scanner (OCR)</h2>
 
-      <div className="relative w-[300px] h-[200px] border-4 border-blue-500 rounded-md overflow-hidden">
-        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-        <div className="absolute top-0 left-0 w-full h-full border-4 border-dashed border-white pointer-events-none rounded-md" />
+      <div className="relative w-full max-w-[720px] aspect-video rounded-xl overflow-hidden shadow-lg bg-black">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay: center band */}
+        <div
+          className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 ${boxColor} transition-colors`}
+          style={{ width: "80%", height: "22%" }}
+        >
+          {/* moving scan line */}
+          <div
+            className="absolute left-0 w-full h-[3px] bg-white/80"
+            style={{
+              animation: "scanline 2s linear infinite",
+            }}
+          />
+        </div>
       </div>
 
-      <p className="mt-4 text-lg">
-        Detected VIN: <strong>{vin || "Scanning..."}</strong>
+      <div className="mt-4 flex gap-3">
+        <button
+          onClick={() => setFacingMode((p) => (p === "user" ? "environment" : "user"))}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow"
+        >
+          🔄 Switch Camera
+        </button>
+        <button
+          onClick={() => setDetectedVIN("")}
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg shadow"
+        >
+          ♻️ Reset
+        </button>
+      </div>
+
+      <p className="mt-3 font-semibold">
+        Detected VIN: <span className="text-green-700">{detectedVIN || "—"}</span>
       </p>
 
-      <div className="flex gap-3 mt-4">
-        <button
-          onClick={toggleCamera}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-        >
-          Switch to {facingMode === "environment" ? "Front" : "Back"} Camera
-        </button>
-
-        <button
-          onClick={toggleTorch}
-          className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
-        >
-          {isTorchOn ? "Turn Off" : "Turn On"} Torch
-        </button>
-      </div>
-
-      <ToastContainer position="top-center" autoClose={3000} />
+      <style>{`
+        @keyframes scanline { 
+          0% { top: 8%; } 
+          100% { top: 90%; } 
+        }
+      `}</style>
     </div>
   );
-};
-
-export default Scanner;
+}
